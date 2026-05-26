@@ -5,11 +5,18 @@ const AuthContext = createContext(null)
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(undefined) // undefined = cargando, null = no autenticado
 
+  // Refresca sesión cada 2 minutos
   useEffect(() => {
-    fetch('/api/me', { credentials: 'include' })
-      .then(r => r.json())
-      .then(data => setUser(data.user || null))
-      .catch(() => setUser(null))
+    let mounted = true
+    const check = () => {
+      fetch('/api/me', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => { if (mounted) setUser(data.user || null) })
+        .catch(() => { if (mounted) setUser(null) })
+    }
+    check()
+    const interval = setInterval(check, 120000)
+    return () => { mounted = false; clearInterval(interval) }
   }, [])
 
   const login = async (username, password) => {

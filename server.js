@@ -35,12 +35,13 @@ app.post('/api/login', (req, res) => {
   if (username !== APP_USER || password !== APP_PASSWORD) {
     return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
   }
-  const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '7d' });
+  // Expira en 2 horas
+  const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '2h' });
   res.cookie('token', token, {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: IS_PROD ? 'none' : 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000
+    maxAge: 2 * 60 * 60 * 1000 // 2 horas
   });
   res.json({ ok: true, username });
 });
