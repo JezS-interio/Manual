@@ -1,10 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 
-const dataDir = path.join(__dirname, 'data');
+// En Vercel el filesystem es de solo lectura excepto /tmp
+const isVercel = process.env.VERCEL === '1';
+const dataDir = isVercel ? '/tmp' : path.join(__dirname, 'data');
 const dbPath = path.join(dataDir, 'db.json');
 
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+if (!isVercel && !fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 
 const defaultData = {
   areas: [
