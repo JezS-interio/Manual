@@ -17,7 +17,14 @@ export default function Home() {
       fetch('/api/problemas').then(r => r.json())
     ]).then(([a, p]) => {
       setAreas(a)
-      setRecientes(p.slice(0, 6))
+      // Ordenar por vistas DESC y creado_en DESC (ya viene así del backend, pero aseguramos en frontend)
+      const top = [...p]
+        .sort((a, b) => {
+          if (b.vistas !== a.vistas) return b.vistas - a.vistas;
+          return new Date(b.creado_en) - new Date(a.creado_en);
+        })
+        .slice(0, 6);
+      setRecientes(top)
       setLoading(false)
     })
   }
