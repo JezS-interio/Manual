@@ -26,8 +26,15 @@ async function getProblemas({ area_id, buscar } = {}) {
   const params = [];
   if (area_id) { params.push(area_id); conds.push(`p.area_id = $${params.length}`); }
   if (buscar) {
+    // Usar unaccent para ignorar tildes y lower para ignorar mayúsculas
     params.push(`%${buscar.toLowerCase()}%`);
-    conds.push(`(LOWER(p.titulo) LIKE $${params.length} OR LOWER(p.descripcion) LIKE $${params.length} OR LOWER(p.solucion) LIKE $${params.length} OR LOWER(p.tags) LIKE $${params.length} OR LOWER(a.nombre) LIKE $${params.length})`);
+    conds.push(`(
+      unaccent(lower(p.titulo)) LIKE unaccent($${params.length}) OR
+      unaccent(lower(p.descripcion)) LIKE unaccent($${params.length}) OR
+      unaccent(lower(p.solucion)) LIKE unaccent($${params.length}) OR
+      unaccent(lower(p.tags)) LIKE unaccent($${params.length}) OR
+      unaccent(lower(a.nombre)) LIKE unaccent($${params.length})
+    )`);
   }
   if (conds.length) q += ' WHERE ' + conds.join(' AND ');
   q += ' ORDER BY p.vistas DESC, p.creado_en DESC';
