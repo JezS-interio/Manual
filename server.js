@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-const { load, save } = require('./db');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,104 +68,81 @@ function norm(str) {
 }
 
 // ─── ÁREAS ───────────────────────────────────────────────
-app.get('/api/areas', (req, res) => {
-  const data = load();
-  const areas = data.areas.map(a => ({
-    ...a,
-    total_problemas: data.problemas.filter(p => p.area_id === a.id).length
-  })).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  res.json(areas);
+app.get('/api/areas', async (req, res) => {
+  try {
+    const areas = await db.getAreas();
+    res.json(areas);
+  } catch (e) { res.status(500).json({ error: 'Error al obtener áreas' }); }
 });
 
-app.post('/api/areas', requireAuth, (req, res) => {
+app.post('/api/areas', requireAuth, async (req, res) => {
   const { nombre, descripcion, color } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es requerido' });
-  const data = load();
-  if (data.areas.find(a => a.nombre.toLowerCase() === nombre.toLowerCase()))
-    return res.status(400).json({ error: 'El área ya existe' });
-  const newArea = { id: data.nextAreaId, nombre, descripcion: descripcion || '', color: color || '#6366f1', creado_en: new Date().toISOString() };
-  data.areas.push(newArea);
-  data.nextAreaId++;
-  save(data);
-  res.json(newArea);
+  try {
+    // Verificar unicidad
+    const existentes = await db.getAreas();
+    if (existentes.find(a => a.nombre.toLowerCase() === nombre.toLowerCase()))
+      return res.status(400).json({ error: 'El área ya existe' });
+    const newArea = await db.addArea({ nombre, descripcion, color });
+    res.json(newArea);
+  } catch (e) { res.status(500).json({ error: 'Error al crear área' }); }
 });
 
-app.delete('/api/areas/:id', requireAuth, (req, res) => {
+app.delete('/api/areas/:id', requireAuth, async (req, res) => {
   const id = Number(req.params.id);
-  const data = load();
-  data.problemas = data.problemas.filter(p => p.area_id !== id);
-  data.areas = data.areas.filter(a => a.id !== id);
-  save(data);
-  res.json({ ok: true });
+  try {
+    await db.deleteArea(id);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Error al borrar área' }); }
 });
 
 // ─── PROBLEMAS ───────────────────────────────────────────
-app.get('/api/problemas', (req, res) => {
+app.get('/api/problemas', async (req, res) => {
   const { area_id, buscar } = req.query;
-  const data = load();
-  let problemas = data.problemas.map(p => {
-    const area = data.areas.find(a => a.id === p.area_id) || {};
-    return { ...p, area_nombre: area.nombre, area_color: area.color, area_icono: area.icono };
-  });
-  if (area_id) problemas = problemas.filter(p => p.area_id === Number(area_id));
-  if (buscar) {
-    const q = norm(buscar);
-    problemas = problemas.filter(p =>
-      norm(p.titulo).includes(q) ||
-      norm(p.descripcion).includes(q) ||
-      norm(p.solucion).includes(q) ||
-      norm(p.tags).includes(q) ||
-      norm(p.area_nombre).includes(q)
-    );
-  }
-  problemas.sort((a, b) => b.vistas - a.vistas || new Date(b.creado_en) - new Date(a.creado_en));
-  res.json(problemas);
+  try {
+    const problemas = await db.getProblemas({ area_id, buscar: buscar ? norm(buscar) : undefined });
+    res.json(problemas);
+  } catch (e) { res.status(500).json({ error: 'Error al obtener problemas' }); }
 });
 
-app.get('/api/problemas/:id', (req, res) => {
-  const data = load();
-  const p = data.problemas.find(p => p.id === Number(req.params.id));
-  if (!p) return res.status(404).json({ error: 'No encontrado' });
-  const area = data.areas.find(a => a.id === p.area_id) || {};
-  res.json({ ...p, area_nombre: area.nombre, area_color: area.color, area_icono: area.icono });
+app.get('/api/problemas/:id', async (req, res) => {
+  try {
+    const p = await db.getProblema(Number(req.params.id));
+    if (!p) return res.status(404).json({ error: 'No encontrado' });
+    res.json(p);
+  } catch (e) { res.status(500).json({ error: 'Error al obtener problema' }); }
 });
 
 // Registrar visita (llamado por separado desde el cliente)
-app.post('/api/problemas/:id/vista', (req, res) => {
-  const data = load();
-  const p = data.problemas.find(p => p.id === Number(req.params.id));
-  if (!p) return res.status(404).json({ error: 'No encontrado' });
-  p.vistas = (p.vistas || 0) + 1;
-  save(data);
-  res.json({ vistas: p.vistas });
+app.post('/api/problemas/:id/vista', async (req, res) => {
+  try {
+    const vistas = await db.registrarVista(Number(req.params.id));
+    res.json({ vistas });
+  } catch (e) { res.status(500).json({ error: 'Error al registrar vista' }); }
 });
 
-app.post('/api/problemas', requireAuth, (req, res) => {
+app.post('/api/problemas', requireAuth, async (req, res) => {
   const { area_id, titulo, descripcion, solucion, tags } = req.body;
   if (!area_id || !titulo || !descripcion || !solucion) return res.status(400).json({ error: 'Faltan campos requeridos' });
-  const data = load();
-  const newProblema = { id: data.nextProblemaId, area_id: Number(area_id), titulo, descripcion, solucion, tags: tags || '', vistas: 0, creado_en: new Date().toISOString() };
-  data.problemas.push(newProblema);
-  data.nextProblemaId++;
-  save(data);
-  res.json(newProblema);
+  try {
+    const nuevo = await db.addProblema({ area_id: Number(area_id), titulo, descripcion, solucion, tags });
+    res.json(nuevo);
+  } catch (e) { res.status(500).json({ error: 'Error al crear problema' }); }
 });
 
-app.put('/api/problemas/:id', requireAuth, (req, res) => {
+app.put('/api/problemas/:id', requireAuth, async (req, res) => {
   const { titulo, descripcion, solucion, tags } = req.body;
-  const data = load();
-  const p = data.problemas.find(p => p.id === Number(req.params.id));
-  if (!p) return res.status(404).json({ error: 'No encontrado' });
-  Object.assign(p, { titulo, descripcion, solucion, tags: tags || '' });
-  save(data);
-  res.json({ ok: true });
+  try {
+    await db.updateProblema(Number(req.params.id), { titulo, descripcion, solucion, tags });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Error al actualizar problema' }); }
 });
 
-app.delete('/api/problemas/:id', requireAuth, (req, res) => {
-  const data = load();
-  data.problemas = data.problemas.filter(p => p.id !== Number(req.params.id));
-  save(data);
-  res.json({ ok: true });
+app.delete('/api/problemas/:id', requireAuth, async (req, res) => {
+  try {
+    await db.deleteProblema(Number(req.params.id));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Error al borrar problema' }); }
 });
 
 // ─── SERVIR FRONTEND EN PRODUCCIÓN ───────────────────────
