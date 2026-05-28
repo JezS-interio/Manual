@@ -61,11 +61,6 @@ export default function Layout() {
           </div>
           <div className="flex gap-3 items-center justify-end w-full md:w-auto mt-2 md:mt-0">
             <button
-              className="flex items-center gap-2 bg-white/10 border border-white/10 text-gray-200 px-4 py-2 rounded-xl text-base font-medium hover:bg-white/20 hover:text-indigo-300 transition-colors shadow-sm"
-            >
-              Auditoría
-            </button>
-            <button
               onClick={() => setShowAddProblem(true)}
               className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-xl text-base font-semibold hover:bg-indigo-500 transition-colors shadow-md"
             >
